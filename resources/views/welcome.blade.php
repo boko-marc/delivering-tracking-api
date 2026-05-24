@@ -6,7 +6,7 @@
     <meta http-equiv="X-UA-Compatible" content="ie=edge">
     <title>Document</title>
 </head>
-<h1>Welcome to the Application</h1>
+<h1>Welcome to the Delivery API</h1>
 <body>
 
 </body>
