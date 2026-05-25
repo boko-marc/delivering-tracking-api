@@ -1,0 +1,25 @@
+{
+    "name": "module/shared",
+    "description": "Traits, helpers, base classes, enums, custom validation rules",
+    "version": "0.0.1",
+    "autoload": {
+        "psr-4": {
+            "Module\\Shared\\": "src/"
+        }
+    },
+    "authors": [
+        {
+            "name": "boko-marc",
+            "email": "marcboko.uriel@gmail.com"
+        }
+    ],
+    "require": {},
+    "extra": {
+        "laravel": {
+            "providers": [
+                "Module\\Shared\\Providers\\SharedServiceProvider"
+            ]
+        }
+    }
+
+}
