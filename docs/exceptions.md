@@ -1,119 +1,187 @@
-# Exceptions & API Responses
+# Exception & API Response Handling
 
 ## Overview
 
-All errors in the API are handled through a single `ApiException` class that returns JSON responses with a consistent schema. Exception handling is centralized in `bootstrap/app.php` and respects the application locale (set via `X-Locale` header).
+Errors are managed via the `ApiException` class and a global handler in `bootstrap/app.php`. All errors return JSON with a consistent schema. The API respects the `X-Locale` header for translations.
 
-## Exception Usage
+## Architecture
 
-### Pattern 1: Static Message (No Translation)
+Two types of errors:
 
-⚠️ Only for development or debugging.
+1. **Laravel Exceptions** — automatically caught and converted to JSON
+2. **ApiException** — manually thrown for business logic errors
+
+Each error implements `ErrorContract` (interface) via enums.
+
+### ErrorContract Interface
 
 ```php
-throw ApiException::notFound('User not found');
-throw ApiException::badRequest('Invalid email format');
-throw ApiException::unauthorized('Token expired');
-throw ApiException::forbidden('Insufficient permissions');
+interface ErrorContract {
+    public function code(): string;           // "NOT_FOUND", "CONFLICT", etc.
+    public function translationKey(): string; // "errors.not_found"
+}
 ```
 
-This uses the provided text directly. It does not translate based on `X-Locale`.
+### Shared ErrorCode
 
-### Pattern 2: Translate Message with a Translation Key (Recommended)
-
-✅ Use this for production APIs.
+File: `modules/shared/src/Enums/ErrorCode.php`
 
 ```php
-throw ApiException::notFound(
-    message: __('errors.user_not_found')
-);
-
-throw ApiException::badRequest(
-    message: __('errors.invalid_email')
-);
+enum ErrorCode: string implements ErrorContract {
+    case NOT_FOUND = 'NOT_FOUND';
+    case UNAUTHORIZED = 'UNAUTHORIZED';
+    case FORBIDDEN = 'FORBIDDEN';
+    case VALIDATION_ERROR = 'VALIDATION_ERROR';
+    case ROUTE_NOT_FOUND = 'ROUTE_NOT_FOUND';
+    case METHOD_NOT_ALLOWED = 'METHOD_NOT_ALLOWED';
+    case INTERNAL_SERVER_ERROR = 'INTERNAL_SERVER_ERROR';
+    
+    public function code(): string { return $this->value; }
+    public function translationKey(): string { 
+        return match($this) {
+            self::NOT_FOUND => 'errors.not_found',
+            // ...
+        };
+    }
+}
 ```
 
-Translation file `modules/shared/lang/fr/errors.php`:
-```php
-return [
-    'user_not_found' => 'Utilisateur non trouvé',
-    'invalid_email' => 'Email invalide',
-];
-```
-
-The `__()` helper loads the translation for the current locale, using `X-Locale` or default `fr`.
-
-### Pattern 3: Module Error Enum + Translation Key (Best Practice)
-
-✅ Use this when your module defines domain-specific errors.
+## Throwing an ApiException
 
 ```php
+use Module\Shared\Exceptions\ApiException;
+use Module\Shared\Enums\ErrorCode;
 use Modules\Delivery\Enums\DeliveryErrorCode;
 
+// Standard error
+throw ApiException::notFound(ErrorCode::NOT_FOUND);
+
+// With contextual data
 throw ApiException::notFound(
-    message: __(
-        DeliveryErrorCode::PACKAGE_NOT_FOUND->translationKey()
-    )
+    ErrorCode::NOT_FOUND,
+    data: ['resource_type' => 'package', 'id' => 123]
+);
+
+// Business error (module enum)
+throw ApiException::badRequest(
+    DeliveryErrorCode::INVALID_TRACKING_NUMBER,
+    data: ['tracking_number' => 'ABC-123']
+);
+
+// Custom message (rare)
+throw ApiException::notFound(
+    ErrorCode::NOT_FOUND,
+    message: __('custom.translation.key')
 );
 ```
 
-`DeliveryErrorCode::PACKAGE_NOT_FOUND->translationKey()` returns a translation key such as `errors.package_not_found`.
+**Helpers**: `notFound()` (404), `badRequest()` (400), `unauthorized()` (401), `forbidden()` (403)
 
-Translation file `modules/delivery/lang/fr/errors.php`:
+## Laravel Exceptions (Auto-Caught)
+
+| Exception | Status | ErrorCode | Data |
+|-----------|--------|-----------|------|
+| `ModelNotFoundException` | 404 | `NOT_FOUND` | `{resource_type, resource_id}` |
+| `ValidationException` | 422 | `VALIDATION_ERROR` | `{errors: {field: [rules]}}` |
+| `NotFoundHttpException` | 404 | `ROUTE_NOT_FOUND` | `{url, method}` |
+| `MethodNotAllowedHttpException` | 405 | `METHOD_NOT_ALLOWED` | `{method, allowed_methods}` |
+| `AuthenticationException` | 401 | `UNAUTHORIZED` | `{message, url, method}` |
+| `AccessDeniedHttpException` | 403 | `FORBIDDEN` | `{message, url, method}` |
+
+**Examples**:
+
+```php
+// Auto → 404 NOT_FOUND
+$package = Package::findOrFail($id);
+
+// Auto → 422 VALIDATION_ERROR
+$request->validate(['tracking_number' => 'required|unique']);
+
+// Auto → 401 UNAUTHORIZED
+abort(401);
+```
+
+## Creating a Business Error Enum
+
+File: `modules/{module}/src/Enums/{Module}ErrorCode.php`
+
+```php
+<?php
+namespace Modules\Delivery\Enums;
+
+use Module\Shared\Contracts\ErrorContract;
+
+enum DeliveryErrorCode: string implements ErrorContract {
+    case PACKAGE_NOT_FOUND = 'DELIVERY_PACKAGE_NOT_FOUND';
+    case INVALID_TRACKING_NUMBER = 'DELIVERY_INVALID_TRACKING';
+    case STATUS_CONFLICT = 'DELIVERY_STATUS_CONFLICT';
+    
+    public function code(): string {
+        return $this->value;
+    }
+    
+    public function translationKey(): string {
+        return match($this) {
+            self::PACKAGE_NOT_FOUND => 'errors.package_not_found',
+            self::INVALID_TRACKING_NUMBER => 'errors.invalid_tracking',
+            self::STATUS_CONFLICT => 'errors.status_conflict',
+        };
+    }
+}
+```
+
+File: `modules/delivery/lang/en/errors.php`
+
 ```php
 return [
-    'package_not_found' => 'Colis non trouvé',
+    'package_not_found' => 'Package not found',
+    'invalid_tracking' => 'Invalid tracking number',
+    'status_conflict' => 'The package status does not allow this action',
 ];
 ```
 
-### With Data Payload
+**Usage**:
 
 ```php
-throw ApiException::badRequest(
-    message: __('errors.validation_failed'),
-    data: ['field' => 'email', 'rule' => 'unique']
+throw ApiException::notFound(
+    DeliveryErrorCode::PACKAGE_NOT_FOUND,
+    data: ['id' => $id]
 );
-```
 
-### Custom Status Code
-
-```php
-throw new ApiException(
-    status: 429,
-    codeEnum: ErrorCode::VALIDATION_ERROR,
-    message: __('errors.too_many_requests'),
-    data: ['retry_after' => 60]
+throw ApiException::badRequest(
+    DeliveryErrorCode::STATUS_CONFLICT,
+    data: ['current' => 'in_transit', 'requested' => 'reschedule']
 );
 ```
 
 ## Response Schemas
 
-### Success Response (2xx)
+### Success (2xx)
+
 ```json
 {
     "success": true,
-    "data": {
-        "id": 123,
-        "name": "John Doe"
-    },
-    "message": "Operation successful"
+    "data": { "id": 1, "name": "John" },
+    "message": null
 }
 ```
 
-### Error Response (4xx, 5xx)
+### Error (4xx, 5xx)
+
 ```json
 {
     "success": false,
     "error": {
         "code": "NOT_FOUND",
-        "message": "Resource not found",
+        "message": "Package not found",
         "status": 404
     },
-    "data": null
+    "data": { "resource_type": "package", "resource_id": 123 }
 }
 ```
 
-### Validation Error (422)
+### Validation (422)
+
 ```json
 {
     "success": false,
@@ -131,236 +199,45 @@ throw new ApiException(
 }
 ```
 
-### Authentication Error (401)
-```json
-{
-    "success": false,
-    "error": {
-        "code": "UNAUTHORIZED",
-        "message": "Unauthenticated",
-        "status": 401
-    },
-    "data": null
-}
-```
-
-### Permission Error (403)
-```json
-{
-    "success": false,
-    "error": {
-        "code": "FORBIDDEN",
-        "message": "You don't have permission to access this resource",
-        "status": 403
-    },
-    "data": null
-}
-```
-
 ### Server Error (500)
+
+**Production/Sandbox**:
 ```json
 {
     "success": false,
     "error": {
         "code": "INTERNAL_SERVER_ERROR",
-        "message": "An unexpected error occurred",
+        "message": "An error occurred",
         "status": 500
     },
-    "data": {
-        "debug": "Exception stack trace (only if APP_DEBUG=true)"
-    }
+    "data": { "error_id": "ERROR-xyz-123456" }
 }
 ```
 
-## Global Exception Types Handled
-
-The `bootstrap/app.php` handler automatically converts these to JSON:
-
-- **`ApiException`** → formatted with custom code + message
-- **`ValidationException`** → 422 with `VALIDATION_ERROR` code
-- **`NotFoundHttpException`** (route binding) → 404 with `NOT_FOUND` code
-- **`AuthenticationException`** → 401 with `UNAUTHORIZED` code
-- **Any other exception** → 500 with `INTERNAL_SERVER_ERROR` code
-
-## How to Create Module-Specific Error Codes
-
-When a module needs custom error codes, follow these steps:
-
-### Step 1: Create the Enum
-
-File: `modules/{module}/src/Enums/{Module}ErrorCode.php`
-
-```php
-<?php
-
-namespace Modules\Delivery\Enums;
-
-enum DeliveryErrorCode: string
+**Local**:
+```json
 {
-    case PACKAGE_NOT_FOUND = 'PACKAGE_NOT_FOUND';
-    case INVALID_TRACKING_NUMBER = 'INVALID_TRACKING_NUMBER';
-    case DELIVERY_WINDOW_EXPIRED = 'DELIVERY_WINDOW_EXPIRED';
-
-    /**
-     * Returns the translation key for this error code.
-     * Keys must exist in modules/{module}/lang/{locale}/errors.php
-     */
-    public function translationKey(): string
-    {
-        return match ($this) {
-            self::PACKAGE_NOT_FOUND => 'errors.package_not_found',
-            self::INVALID_TRACKING_NUMBER => 'errors.invalid_tracking_number',
-            self::DELIVERY_WINDOW_EXPIRED => 'errors.delivery_window_expired',
-        };
-    }
+    "success": false,
+    "error": {
+        "code": "INTERNAL_SERVER_ERROR",
+        "message": "Exception message",
+        "status": 500
+    },
+    "data": { "exception": "...", "trace": "..." }
 }
 ```
 
-### Step 2: Add French Translations
+## Locale & Translations
 
-File: `modules/{module}/lang/fr/errors.php`
-
-```php
-<?php
-
-// Keys must match the translationKey() method return values
-return [
-    'package_not_found' => 'Colis non trouvé',
-    'invalid_tracking_number' => 'Numéro de suivi invalide',
-    'delivery_window_expired' => 'Fenêtre de livraison expirée',
-];
-```
-
-### Step 3: Use in Code
-
-```php
-<?php
-
-namespace Modules\Delivery\Http\Controllers;
-
-use Modules\Delivery\Enums\DeliveryErrorCode;
-use Modules\Shared\Exceptions\ApiException;
-
-class PackageController
-{
-    public function show($id)
-    {
-        $package = Package::find($id);
-        
-        if (!$package) {
-            // Use enum's translationKey() to get the translation key
-            // Pass it to __() helper to get translated message
-            throw ApiException::notFound(
-                message: __(
-                    DeliveryErrorCode::PACKAGE_NOT_FOUND->translationKey()
-                )
-            );
-        }
-        
-        return ApiResponse::success(data: $package);
-    }
-    
-    public function store(Request $request)
-    {
-        $request->validate(['tracking_number' => 'required|string|unique:packages']);
-        
-        if (!isValidTrackingNumber($request->tracking_number)) {
-            throw ApiException::badRequest(
-                message: __(
-                    DeliveryErrorCode::INVALID_TRACKING_NUMBER->translationKey()
-                )
-            );
-        }
-        
-        // ...
-    }
-}
-```
-
-**Summary**: Enum cases define `translationKey()` → keys exist in translation files → use `__($enum->translationKey())` in exception throws → automatic multi-language support.
-
-## Locale Handling
-
-The API respects the `X-Locale` header to determine error message language:
+The `X-Locale` header determines the language:
 
 ```bash
 curl -H "X-Locale: en" https://api.example.com/packages/123
-# Returns English error messages
+# "message": "Package not found"
 
 curl -H "X-Locale: fr" https://api.example.com/packages/123
-# Returns French error messages
+# "message": "Colis non trouvé"
 ```
 
-Default locale is `fr` if header is omitted.
+Default locale: `en`
 
-## Testing
-
-### Test Error Responses
-
-```php
-use Modules\Delivery\Enums\DeliveryErrorCode;
-
-test('returns 404 with translated message for missing package', function () {
-    $response = $this->getJson('/api/packages/999', [
-        'X-Locale' => 'fr'
-    ]);
-    
-    $response->assertStatus(404)
-        ->assertJson([
-            'success' => false,
-            'error' => [
-                'code' => 'NOT_FOUND',
-                'message' => 'Colis non trouvé', // ✅ French translation
-                'status' => 404,
-            ],
-        ]);
-});
-
-test('returns 404 with English translation', function () {
-    $response = $this->getJson('/api/packages/999', [
-        'X-Locale' => 'en'
-    ]);
-    
-    $response->assertStatus(404)
-        ->assertJson([
-            'success' => false,
-            'error' => [
-                'code' => 'NOT_FOUND',
-                'message' => 'Package not found', // ✅ English translation
-                'status' => 404,
-            ],
-        ]);
-});
-
-test('returns 422 for validation errors', function () {
-    $response = $this->postJson('/api/packages', [
-        'tracking_number' => '', // required
-    ], [
-        'X-Locale' => 'fr'
-    ]);
-    
-    $response->assertStatus(422)
-        ->assertJson([
-            'success' => false,
-            'error' => [
-                'code' => 'VALIDATION_ERROR',
-                'status' => 422,
-            ],
-        ])
-        ->assertJsonPath('data.errors.tracking_number', fn($errors) => count($errors) > 0);
-});
-```
-
-**Key points**:
-- Always include `X-Locale` header in tests to verify translation
-- Assert the error `code` matches enum case value (e.g., `NOT_FOUND`, `VALIDATION_ERROR`)
-- Assert the `message` is the correct translation for that locale
-
-## Best Practices
-
-1. **Always throw** `ApiException` in controllers/services, never return error values
-2. **Use static helpers** (`notFound`, `badRequest`, etc.) for common HTTP statuses
-3. **Include translation keys** when throwing exceptions with custom messages
-4. **Pass relevant data** to help clients understand the error context
-5. **Test all code paths** that throw exceptions to verify JSON schema
-6. **Set X-Locale header** in tests to verify multi-language support
