@@ -4,19 +4,16 @@ namespace Module\Shared\Middleware;
 
 use Closure;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\App;
 
 class SetLocale
 {
+
     public function handle(Request $request, Closure $next)
     {
-        $locale = $request->header('X-Language');
+        $locale = $request->header('X-Language', config('app.locale'));
 
-        if (! $locale) {
-            $locale = config('app.locale');
-        }
-
-        $supported = ['en', 'fr'];
-        if (! in_array($locale, $supported)) {
+        if (! in_array($locale, ['en', 'fr'])) {
             $locale = config('app.locale');
         }
 
