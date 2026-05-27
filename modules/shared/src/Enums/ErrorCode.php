@@ -17,12 +17,12 @@ enum ErrorCode: string implements ErrorContract
     public function translationKey(): string
     {
         return match ($this) {
-            self::INTERNAL_SERVER_ERROR => 'errors.internal_server_error',
-            self::VALIDATION_ERROR => 'errors.validation_failed',
-            self::NOT_FOUND => 'errors.not_found',
-            self::UNAUTHORIZED => 'errors.unauthenticated',
-            self::FORBIDDEN => 'errors.forbidden',
-            self::ROUTE_NOT_FOUND => 'errors.route_not_found',
+            self::INTERNAL_SERVER_ERROR => 'shared::errors.internal_server_error',
+            self::VALIDATION_ERROR => 'shared::errors.validation_failed',
+            self::NOT_FOUND => 'shared::errors.not_found',
+            self::UNAUTHORIZED => 'shared::errors.unauthenticated',
+            self::FORBIDDEN => 'shared::errors.forbidden',
+            self::ROUTE_NOT_FOUND => 'shared::errors.route_not_found',
             self::METHOD_NOT_ALLOWED => 'errors.method_not_allowed',
         };
     }
