@@ -9,4 +9,5 @@ return [
     'user_not_found' => 'Utilisateur non trouvé',
     'invalid_email' => 'Email invalide',
     'too_many_requests' => 'Trop de requêtes',
+    'route_not_found' => 'Route non trouvée',
 ];
