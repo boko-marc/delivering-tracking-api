@@ -16,7 +16,6 @@
  *     'package_not_found' => 'Colis non trouvé',
  *     'invalid_tracking_number' => 'Numéro de suivi invalide',
  * ];
- *
  * @example
  * // modules/delivery/lang/en/errors.php
  * return [

@@ -15,7 +15,7 @@ class ApiException extends RuntimeException
     protected ?array $data;
 
     public function __construct(
-        int $status ,
+        int $status,
         ErrorContract $error,
         ?array $data = null,
         ?string $message = null,

@@ -8,7 +8,6 @@ use Illuminate\Support\Facades\App;
 
 class SetLocale
 {
-
     public function handle(Request $request, Closure $next)
     {
         $locale = $request->header('X-Language', config('app.locale'));

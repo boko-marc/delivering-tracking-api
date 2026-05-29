@@ -1,24 +1,24 @@
 <?php
 
+use Illuminate\Auth\AuthenticationException;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
-use Illuminate\Auth\AuthenticationException;
-use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
 use Module\Shared\ApiResponse;
 use Module\Shared\Enums\ErrorCode;
 use Module\Shared\Exceptions\ApiException;
-use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
-use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
 use Module\Shared\Middleware\SetLocale;
+use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
 use Symfony\Component\HttpKernel\Exception\MethodNotAllowedHttpException;
+use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
-        web: __DIR__ . '/../routes/web.php',
-        commands: __DIR__ . '/../routes/console.php',
+        web: __DIR__.'/../routes/web.php',
+        commands: __DIR__.'/../routes/console.php',
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
@@ -40,7 +40,6 @@ return Application::configure(basePath: dirname(__DIR__))
                 );
             }
         });
-
 
         $exceptions->renderable(function (ModelNotFoundException $e, Request $request) {
             if ($request->expectsJson() || $request->is('api/*')) {
@@ -129,10 +128,10 @@ return Application::configure(basePath: dirname(__DIR__))
         });
 
         // Global fallback for unhandled exceptions (500 Internal Server Error)
-        //send to sentry in production and sandbox, with detailed logging including error_id for correlation
+        // send to sentry in production and sandbox, with detailed logging including error_id for correlation
         $exceptions->reportable(function (Throwable $e) {
             $isNotLocal = app()->isProduction() || app()->environment('sandbox');
-            $errorId = "ERROR-" . uniqid() . "-" . time();
+            $errorId = 'ERROR-'.uniqid().'-'.time();
             $errorData = [
                 'error_id' => $errorId,
                 'exception' => get_class($e),
@@ -142,13 +141,12 @@ return Application::configure(basePath: dirname(__DIR__))
                 'trace' => $e->getTraceAsString(),
                 'created_at' => now()->toDateTimeString(),
             ];
-            //in production/sandbox, log the error with error_id and send to Sentry if available
-            if ($isNotLocal && !$e instanceof ApiException) {
+            // in production/sandbox, log the error with error_id and send to Sentry if available
+            if ($isNotLocal && ! $e instanceof ApiException) {
 
                 logger()->error(__(ErrorCode::INTERNAL_SERVER_ERROR->translationKey()), $errorData);
 
-
-                //TODO: Sentry captureException with $errorData context (requires Sentry SDK setup in the app)
+                // TODO: Sentry captureException with $errorData context (requires Sentry SDK setup in the app)
                 if (app()->bound('sentry')) {
                     app('sentry')->captureException($e, ['extra' => $errorData]);
                 }
