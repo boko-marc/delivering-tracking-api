@@ -12,7 +12,8 @@
         "php": "^8.3",
         "laravel/framework": "^13.0",
         "laravel/tinker": "^3.0",
-        "module/shared": "^0.0.1"
+        "module/shared": "^0.0.1",
+        "predis/predis": "^3.2"
     },
      "repositories": [
         {
@@ -25,12 +26,14 @@
     ],
     "require-dev": {
         "fakerphp/faker": "^1.23",
+        "larastan/larastan": "^3.9",
         "laravel/pail": "^1.2.5",
         "laravel/pao": "^1.0.6",
         "laravel/pint": "^1.27",
         "mockery/mockery": "^1.6",
         "nunomaduro/collision": "^8.6",
-        "phpunit/phpunit": "^12.5.12"
+        "phpunit/phpunit": "^12.5.12",
+        "rector/rector": "^2.4"
     },
     "autoload": {
         "psr-4": {
@@ -57,10 +60,31 @@
             "Composer\\Config::disableProcessTimeout",
             "npx concurrently -c \"#93c5fd,#c4b5fd,#fb7185,#fdba74\" \"php artisan serve\" \"php artisan queue:listen --tries=1 --timeout=0\" \"php artisan pail --timeout=0\" \"npm run dev\" --names=server,queue,logs,vite --kill-others"
         ],
+        "lint": "vendor/bin/pint --test",
+        "lint:fix": "vendor/bin/pint",
+        "analyse": "vendor/bin/phpstan analyse",
+        "refactor:dry": "vendor/bin/rector process --dry-run",
+        "refactor": "vendor/bin/rector process",
         "test": [
             "@php artisan config:clear --ansi @no_additional_args",
-            "@php artisan test"
+            "@php artisan test --testsuite=Unit,Feature"
         ],
+        "test:smoke": [
+            "@php artisan config:clear --ansi @no_additional_args",
+            "@php artisan test --testsuite=Smoke"
+        ],
+        "quality": [
+            "@lint",
+            "@analyse",
+            "@test"
+        ],
+        "quality:pre-commit": [
+            "@lint",
+            "@analyse",
+            "@refactor:dry",
+            "@test:smoke"
+        ],
+        "hooks:install": "git config core.hooksPath .githooks",
         "post-autoload-dump": [
             "Illuminate\\Foundation\\ComposerScripts::postAutoloadDump",
             "@php artisan package:discover --ansi"
