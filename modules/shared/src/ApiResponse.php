@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Module\Shared;
 
 use Illuminate\Http\JsonResponse;
@@ -15,6 +17,9 @@ final class ApiResponse
         ], $status);
     }
 
+    /**
+     * @param  array<array-key, mixed>|object|null  $errors
+     */
     public static function error(int $status, ?string $message = null, array|object|null $errors = null, ?string $code = null): JsonResponse
     {
         $payload = [
@@ -24,7 +29,7 @@ final class ApiResponse
                 'message' => $message,
                 'status' => $status,
             ],
-            'data' => $errors ? $errors : null,
+            'data' => $errors ?: null,
         ];
 
         return response()->json($payload, $status);

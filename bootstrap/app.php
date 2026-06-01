@@ -35,8 +35,8 @@ return Application::configure(basePath: dirname(__DIR__))
                 return ApiResponse::error(
                     status: $e->getStatus(),
                     message: $e->getMessage(),
-                    code: $e->getErrorCode(),
-                    errors: $e->getData()
+                    errors: $e->getData(),
+                    code: $e->getErrorCode()
                 );
             }
         });
@@ -49,11 +49,11 @@ return Application::configure(basePath: dirname(__DIR__))
                 return ApiResponse::error(
                     status: 404,
                     message: __(ErrorCode::NOT_FOUND->translationKey()),
-                    code: ErrorCode::NOT_FOUND->code(),
                     errors: [
                         'resource_type' => $model,
                         'resource_id' => $ids[0] ?? null,
-                    ]
+                    ],
+                    code: ErrorCode::NOT_FOUND->code()
                 );
             }
         });
@@ -63,11 +63,11 @@ return Application::configure(basePath: dirname(__DIR__))
                 return ApiResponse::error(
                     status: 404,
                     message: __(ErrorCode::ROUTE_NOT_FOUND->translationKey()),
-                    code: ErrorCode::ROUTE_NOT_FOUND->code(),
                     errors: [
                         'url' => $request->fullUrl(),
                         'method' => $request->method(),
-                    ]
+                    ],
+                    code: ErrorCode::ROUTE_NOT_FOUND->code()
                 );
             }
         });
@@ -77,11 +77,11 @@ return Application::configure(basePath: dirname(__DIR__))
                 return ApiResponse::error(
                     status: 405,
                     message: __(ErrorCode::METHOD_NOT_ALLOWED->translationKey()),
-                    code: ErrorCode::METHOD_NOT_ALLOWED->code(),
                     errors: [
                         'method' => $request->method(),
                         'allowed_methods' => $e->getHeaders()['Allow'] ?? [],
-                    ]
+                    ],
+                    code: ErrorCode::METHOD_NOT_ALLOWED->code()
                 );
             }
         });
@@ -91,12 +91,12 @@ return Application::configure(basePath: dirname(__DIR__))
                 return ApiResponse::error(
                     status: 401,
                     message: __(ErrorCode::UNAUTHORIZED->translationKey()),
-                    code: ErrorCode::UNAUTHORIZED->code(),
                     errors: [
                         'message' => $e->getMessage(),
                         'url' => $request->fullUrl(),
                         'method' => $request->method(),
-                    ]
+                    ],
+                    code: ErrorCode::UNAUTHORIZED->code()
                 );
             }
         });
@@ -106,12 +106,12 @@ return Application::configure(basePath: dirname(__DIR__))
                 return ApiResponse::error(
                     status: 403,
                     message: __(ErrorCode::FORBIDDEN->translationKey()),
-                    code: ErrorCode::FORBIDDEN->code(),
                     errors: [
                         'message' => $e->getMessage(),
                         'url' => $request->fullUrl(),
                         'method' => $request->method(),
-                    ]
+                    ],
+                    code: ErrorCode::FORBIDDEN->code()
                 );
             }
         });
@@ -121,8 +121,8 @@ return Application::configure(basePath: dirname(__DIR__))
                 return ApiResponse::error(
                     status: 422,
                     message: __(ErrorCode::VALIDATION_ERROR->translationKey()),
-                    code: ErrorCode::VALIDATION_ERROR->code(),
-                    errors: $e->errors()  // Détails des champs en erreur
+                    errors: $e->errors(),
+                    code: ErrorCode::VALIDATION_ERROR->code()  // Détails des champs en erreur
                 );
             }
         });
@@ -134,7 +134,7 @@ return Application::configure(basePath: dirname(__DIR__))
             $errorId = 'ERROR-'.uniqid().'-'.time();
             $errorData = [
                 'error_id' => $errorId,
-                'exception' => get_class($e),
+                'exception' => $e::class,
                 'message' => $e->getMessage(),
                 'file' => $e->getFile(),
                 'line' => $e->getLine(),
@@ -147,23 +147,24 @@ return Application::configure(basePath: dirname(__DIR__))
                 logger()->error(__(ErrorCode::INTERNAL_SERVER_ERROR->translationKey()), $errorData);
 
                 // TODO: Sentry captureException with $errorData context (requires Sentry SDK setup in the app)
-                if (app()->bound('sentry')) {
-                    app('sentry')->captureException($e, ['extra' => $errorData]);
+                $sentry = app()->bound('sentry') ? app('sentry') : null;
+                if (is_object($sentry) && method_exists($sentry, 'captureException')) {
+                    $sentry->captureException($e, ['extra' => $errorData]);
                 }
 
                 return ApiResponse::error(
                     status: 500,
                     message: __(ErrorCode::INTERNAL_SERVER_ERROR->translationKey()),
-                    code: ErrorCode::INTERNAL_SERVER_ERROR->code(),
-                    errors: ['error_id' => $errorId]
+                    errors: ['error_id' => $errorId],
+                    code: ErrorCode::INTERNAL_SERVER_ERROR->code()
                 );
             }
 
             return ApiResponse::error(
                 status: 500,
                 message: $e->getMessage(),
-                code: ErrorCode::INTERNAL_SERVER_ERROR->code(),
-                errors: $errorData
+                errors: $errorData,
+                code: ErrorCode::INTERNAL_SERVER_ERROR->code()
             );
         });
     })->create();

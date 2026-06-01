@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Module\Shared\Exceptions;
 
 use Module\Shared\Contracts\ErrorContract;
@@ -8,22 +10,19 @@ use Throwable;
 
 class ApiException extends RuntimeException
 {
-    protected int $status;
-
     protected string $errorCode;
 
-    protected ?array $data;
-
+    /**
+     * @param  array<array-key, mixed>|null  $data
+     */
     public function __construct(
-        int $status,
+        protected int $status,
         ErrorContract $error,
-        ?array $data = null,
+        protected ?array $data = null,
         ?string $message = null,
         ?Throwable $previous = null
     ) {
-        $this->status = $status;
         $this->errorCode = $error->code();
-        $this->data = $data;
 
         parent::__construct(
             $message ?? $error->translationKey(),
@@ -32,35 +31,35 @@ class ApiException extends RuntimeException
         );
     }
 
-    public static function notFound(
-        ErrorContract $error,
-        ?array $data = null,
-        ?string $message = null
-    ): self {
+    /**
+     * @param  array<array-key, mixed>|null  $data
+     */
+    public static function notFound(ErrorContract $error, ?array $data = null, ?string $message = null): self
+    {
         return new self(404, $error, $data, $message);
     }
 
-    public static function forbidden(
-        ErrorContract $error,
-        ?array $data = null,
-        ?string $message = null
-    ): self {
+    /**
+     * @param  array<array-key, mixed>|null  $data
+     */
+    public static function forbidden(ErrorContract $error, ?array $data = null, ?string $message = null): self
+    {
         return new self(403, $error, $data, $message);
     }
 
-    public static function unauthorized(
-        ErrorContract $error,
-        ?array $data = null,
-        ?string $message = null
-    ): self {
+    /**
+     * @param  array<array-key, mixed>|null  $data
+     */
+    public static function unauthorized(ErrorContract $error, ?array $data = null, ?string $message = null): self
+    {
         return new self(401, $error, $data, $message);
     }
 
-    public static function badRequest(
-        ErrorContract $error,
-        ?array $data = null,
-        ?string $message = null
-    ): self {
+    /**
+     * @param  array<array-key, mixed>|null  $data
+     */
+    public static function badRequest(ErrorContract $error, ?array $data = null, ?string $message = null): self
+    {
         return new self(400, $error, $data, $message);
     }
 
@@ -74,6 +73,9 @@ class ApiException extends RuntimeException
         return $this->errorCode;
     }
 
+    /**
+     * @return array<array-key, mixed>|null
+     */
     public function getData(): ?array
     {
         return $this->data;

@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 return [
     'internal_server_error' => 'Une erreur inattendue est survenue',
     'validation_failed' => 'Échec de la validation',
