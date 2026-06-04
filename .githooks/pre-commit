@@ -1,0 +1,16 @@
+#!/usr/bin/env sh
+set -eu
+
+export APP_ENV="${APP_ENV:-testing}"
+export DB_CONNECTION="${DB_CONNECTION:-sqlite}"
+export DB_DATABASE="${DB_DATABASE:-database/database.sqlite}"
+
+# Redis optionnel (deactivated by default for pre-commit to avoid requiring Redis during local development)
+export REDIS_CLIENT="${REDIS_CLIENT:-}"
+export CACHE_STORE="${CACHE_STORE:-array}"
+export QUEUE_CONNECTION="${QUEUE_CONNECTION:-sync}"
+export SESSION_DRIVER="${SESSION_DRIVER:-array}"
+
+
+
+composer quality:pre-commit
